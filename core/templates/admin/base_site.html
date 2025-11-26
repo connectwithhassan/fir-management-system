@@ -1,0 +1,15 @@
+{% extends "admin/base.html" %}
+
+{% block title %} {{ title }} | Police Admin {% endblock %}
+
+{% block branding %}
+    <h1 id="site-name"><a href="{% url 'admin:index' %}">🚔 FIR Management System</a></h1>
+{% endblock %}
+
+{% block nav-global %}
+    <div style="float: right; margin-top: 8px; margin-right: 20px;">
+        <a href="/reports/" target="_blank" style="background-color: #28a745; color: white; padding: 8px 15px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+            📊 View All Reports
+        </a>
+    </div>
+{% endblock %}

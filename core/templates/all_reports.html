@@ -1,0 +1,147 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" type="text/css" href="{% static 'admin/css/changelists.css' %}">
+  
+  <style>
+      /* ... (Existing styles) ... */
+      #content-main { padding: 20px; }
+      a { text-decoration: none; }
+      #toolbar { background: var(--darkened-bg, #f8f9fa); padding: 15px; border: 1px solid var(--hairline-color, #eaeaea); border-radius: 4px; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .search-input, .status-select { height: 40px !important; padding: 0 12px; border: 1px solid var(--hairline-color, #ccc); background-color: var(--body-bg, #fff); color: var(--body-fg, #333); border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+      .status-select option { background-color: var(--body-bg, #fff); color: var(--body-fg, #333); }
+      .btn-search { height: 40px !important; background: var(--button-bg, #447e9b); color: var(--button-fg, white); border: none; padding: 0 25px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; text-transform: uppercase; transition: opacity 0.2s; }
+      .btn-search:hover { opacity: 0.9; }
+      .btn-clear { color: var(--body-quiet-color, #666); padding: 0 10px; height: 40px; line-height: 40px; font-size: 13px; display: inline-block; }
+      .reports-table-container { border: 1px solid var(--hairline-color, #eaeaea); border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
+      .reports-table { width: 100%; border-collapse: collapse; color: var(--body-fg, #333); }
+      .reports-table thead { background-color: var(--header-bg, #333); color: var(--header-color, #fff); }
+      .reports-table th { padding: 12px 15px; text-transform: uppercase; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-align: left; border-bottom: 1px solid var(--hairline-color, #444); }
+      .reports-table td { padding: 12px 15px; vertical-align: middle; border-bottom: 1px solid var(--hairline-color, #eaeaea); }
+      .row1 { background-color: var(--row1-bg, #fff); } .row2 { background-color: var(--row2-bg, #f9f9f9); }
+      .case-link { font-weight: bold; color: var(--link-fg, #447e9b); } .criminal-link { color: var(--body-fg, #333); }
+      
+      /* New Status Badges & Blinking Animation */
+      .status-badge { padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #fff; display: inline-block; }
+      .bg-pending { background-color: #ffc107; color: #000; }
+      .bg-solved { background-color: #28a745; }
+      .bg-snoozed { background-color: #17a2b8; }
+      .bg-expired { background-color: #dc3545; }
+      .bg-interim { background-color: #fd7e14; } /* Orange for Interim */
+      .bg-challan { background-color: #6f42c1; } /* Purple for Challan */
+      .bg-final { background-color: #20c997; color: #000; } /* Teal for Final Report */
+      .bg-aclass { background-color: #6c757d; } /* Grey for A-Class */
+
+      @keyframes blinker { 50% { opacity: 0.5; } }
+      .blink { animation: blinker 1.5s linear infinite; }
+
+      .alert-box { background: var(--darkened-bg, #fff); border-left: 5px solid #f0ad4e; margin-bottom: 20px; padding: 15px; border: 1px solid var(--hairline-color, #ddd); }
+      .alert-item { border-bottom: 1px solid var(--hairline-color, #eee); color: var(--body-fg, #444); padding: 8px 0; display: flex; align-items: center; }
+      .paginator-footer { padding: 10px 15px; background: var(--darkened-bg, #f8f9fa); color: var(--body-quiet-color, #666); font-size: 12px; border-top: 1px solid var(--hairline-color, #eaeaea); }
+  </style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">{% translate 'Home' %}</a> &rsaquo; FIR Reports</div>
+{% endblock %}
+
+{% block content %}
+  {% if system_alerts %}
+  <div class="alert-box">
+      <h3 style="margin-top: 0; font-size: 16px; color: #d9534f; margin-bottom: 10px;">🔔 Recent Alerts</h3>
+      <div>
+          {% for alert in system_alerts %}
+              <div class="alert-item">
+                  <span style="font-weight:bold; margin-right:15px; min-width: 100px; color: var(--body-quiet-color);">{{ alert.timestamp|date:"d M, H:i" }}</span>
+                  <span>{{ alert.action }}</span>
+              </div>
+          {% endfor %}
+      </div>
+  </div>
+  {% endif %}
+
+  <div id="toolbar">
+      <form method="GET" style="display: flex; gap: 10px; width: 100%; align-items: center;">
+          <div style="flex-grow: 1;">
+              <input type="text" name="q" value="{{ current_query }}" placeholder="Search FIR No., Accused Name, CNIC..." class="search-input" style="width: 100%;">
+          </div>
+          <div>
+              <select name="status" class="status-select">
+                  <option value="ALL" {% if current_status == 'ALL' %}selected{% endif %}>All Statuses</option>
+                  <option value="PENDING" {% if current_status == 'PENDING' %}selected{% endif %}>Pending</option>
+                  <option value="INTERIM" {% if current_status == 'INTERIM' %}selected{% endif %}>Interim</option>
+                  <option value="CHALLAN" {% if current_status == 'CHALLAN' %}selected{% endif %}>Challan</option>
+                  <option value="FINAL_REPORT" {% if current_status == 'FINAL_REPORT' %}selected{% endif %}>Final Report</option>
+                  <option value="A_CLASS" {% if current_status == 'A_CLASS' %}selected{% endif %}>A-Class</option>
+                  <option value="SOLVED" {% if current_status == 'SOLVED' %}selected{% endif %}>Solved</option>
+                  <option value="SNOOZED" {% if current_status == 'SNOOZED' %}selected{% endif %}>Snoozed</option>
+                  <option value="EXPIRED" {% if current_status == 'EXPIRED' %}selected{% endif %}>Expired</option>
+              </select>
+          </div>
+          <button type="submit" class="btn-search">Search</button>
+          {% if current_query or current_status != 'ALL' %} <a href="/reports/" class="btn-clear">Clear</a> {% endif %}
+      </form>
+  </div>
+
+  <div class="reports-table-container">
+      <table class="reports-table">
+        <thead>
+          <tr>
+            <th style="width: 12%;">FIR No.</th>
+            <th style="width: 12%;">Date</th>
+            <th style="width: 25%;">Details</th>
+            <th style="width: 18%;">Accused</th>
+            <th style="width: 10%;">Case Property</th>
+            <th style="width: 13%;">Officer</th>
+            <th style="width: 10%;">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fir in firs %}
+          <tr class="{% cycle 'row1' 'row2' %}">
+            <td><a href="/admin/core/fir/{{ fir.id }}/change/" class="case-link">{{ fir.fir_no }}</a></td>
+            <td>{{ fir.date_reported|date:"d M Y" }}</td>
+            <td><strong>{{ fir.title }}</strong><br><span style="font-size: 11px; opacity: 0.8;">{{ fir.description|truncatewords:8 }}</span></td>
+            <td>
+              {% if fir.is_unknown_accused %} 
+                  <span style="opacity: 0.6; font-style: italic;">Unknown</span>
+              {% else %}
+                  {% for s in fir.accuseds.all %} 
+                      <div><a href="/admin/core/accused/{{ s.id }}/change/" class="criminal-link">{{ s.name }}</a></div> 
+                  {% endfor %}
+              {% endif %}
+            </td>
+            <td>
+              {% if fir.case_property_image %} <a href="{{ fir.case_property_image.url }}" target="_blank" style="font-weight:bold; color: var(--link-fg);">📄 View</a>
+              {% else %} <span style="opacity: 0.5;">-</span> {% endif %}
+            </td>
+            <td>
+                {% if fir.officer_assigned %} 
+                    <div style="line-height: 1.2;">
+                        <span style="font-weight: 600;">{{ fir.officer_assigned.rank }} {{ fir.officer_assigned.name }}</span><br>
+                        <span style="font-size: 10px; opacity: 0.7;">Ph: {{ fir.officer_assigned.phone_number }}</span>
+                    </div>
+                {% else %} <span style="color: #d9534f;">Unassigned</span> {% endif %}
+            </td>
+            <td>
+              {% if fir.status == 'PENDING' %} <span class="status-badge bg-pending">Pending</span>
+              {% elif fir.status == 'INTERIM' %} <span class="status-badge bg-interim blink">Interim</span>
+              {% elif fir.status == 'CHALLAN' %} <span class="status-badge bg-challan">Challan</span>
+              {% elif fir.status == 'FINAL_REPORT' %} <span class="status-badge bg-final">Final Report</span>
+              {% elif fir.status == 'A_CLASS' %} <span class="status-badge bg-aclass">A-Class</span>
+              {% elif fir.status == 'SOLVED' %} <span class="status-badge bg-solved">Solved</span>
+              {% elif fir.status == 'SNOOZED' %} <span class="status-badge bg-snoozed">Snoozed</span>
+              {% elif fir.status == 'EXPIRED' %} <span class="status-badge bg-expired">Expired</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" style="padding: 30px; text-align: center; opacity: 0.7;">No Records Found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="paginator-footer">Total Cases: {{ firs|length }}</div>
+  </div>
+{% endblock %}
